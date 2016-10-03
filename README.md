@@ -1,6 +1,6 @@
 # Alpr Pose (ROS package)
 
-A ROS node to extract pose information form the license plate using openalpr library (http://www.openalpr.com/). It uses simple perspective and point techinique to estimate the poses form the standard license plates used in India.
+A ROS node to extract pose information form the license plate using openalpr library (http://www.openalpr.com/). It uses simple perspective and point technique to estimate the poses form the standard license plates used in India.
 
 # Usage
 
