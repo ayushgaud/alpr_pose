@@ -133,6 +133,7 @@ include_directories(
 
 ## Declare a C++ executable
 add_executable(alpr_pose_node src/alpr_pose.cpp)
+add_executable(car_tag_node src/car_tag.cpp)
 
 ## Add cmake target dependencies of the executable
 ## same as for the library above
@@ -142,7 +143,9 @@ add_executable(alpr_pose_node src/alpr_pose.cpp)
 target_link_libraries(alpr_pose_node ${PROJECT_SOURCE_DIR}/lib/libopenalpr.so.2 #${OpenCV_LIBRARIES}
   ${catkin_LIBRARIES} 
  )
-
+target_link_libraries(car_tag_node
+  ${catkin_LIBRARIES} 
+ )
 #############
 ## Install ##
 #############

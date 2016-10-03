@@ -1,21 +1,3 @@
-/*
- * Copyright (c) 2015 OpenALPR Technology, Inc.
- * Open source Automated License Plate Recognition [http://www.openalpr.com]
- *
- * This file is part of OpenALPR.
- *
- * OpenALPR is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License
- * version 3 as published by the Free Software Foundation
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program. If not, see <http://www.gnu.org/licenses/>.
-*/
 
 #include <cstdio>
 #include <sstream>
@@ -34,6 +16,7 @@
 #include <ros/ros.h>
 #include <ros/package.h>
 #include "geometry_msgs/PoseStamped.h"
+#include "std_msgs/String.h"
 #include <image_transport/image_transport.h>
 #include <cv_bridge/cv_bridge.h>
 
@@ -52,6 +35,8 @@ bool measureProcessingTime = false;
 std::string path = ros::package::getPath("alpr_pose");
 alpr::Alpr openalpr("gb", path + "/config/openalpr.conf");
 ros::Publisher pose_pub; 
+ros::Publisher plate_pub;
+std_msgs::String msg;
 
 std::vector<double> f_data (5, 0);
 std::vector<double> f_sort (5, 0);
@@ -84,7 +69,7 @@ int main( int argc, char** argv )
  openalpr.setTopN(5);
  // Optionally, provide the library with a region for pattern matching.  This improves accuracy by
  // comparing the plate text with the regional pattern.
- //alpr.setDefaultRegion("md");
+ //openalpr.setDefaultRegion("in");
 
  // Make sure the library loaded before continuing.
  // For example, it could fail if the config/runtime_data is not found
@@ -100,6 +85,7 @@ int main( int argc, char** argv )
  cv::startWindowThread();
  image_transport::ImageTransport it(nh);
  image_transport::Subscriber sub = it.subscribe("/bebop/image_raw", 1, imageCallback);
+ plate_pub = nh.advertise<std_msgs::String>("license_plate", 10);
  pose_pub = nh.advertise<geometry_msgs::PoseStamped>("/alpr_pose",1);
  ros::spin();
  cv::destroyWindow("view");
@@ -287,6 +273,23 @@ bool detectandshow( alpr::Alpr* openalpr, cv::Mat frame )
       //Show image with distance printed
       cv::imshow("view", img);
       cv::waitKey(30);
+			alpr::AlprPlateResult plate = results.plates[0];
+			std::cout << "plate" << ": " << plate.topNPlates.size() << " results" << std::endl;
+			for (int k = 0; k < plate.topNPlates.size(); k++)
+			{
+			 alpr::AlprPlate candidate = plate.topNPlates[k];
+			 //std::cout << "    - " << candidate.characters << "\t confidence: " << candidate.overall_confidence;
+			 //std::cout << "\t pattern_match: " << candidate.matches_template << std::endl;
+			 if(candidate.overall_confidence > 75)
+				{
+					std::ostringstream strs;
+      		strs << candidate.overall_confidence;
+      		std::string str = strs.str();
+			 		msg.data = candidate.characters + ": " + str;
+			 		plate_pub.publish(msg);
+			 	}
+			}
+
     } 
   
 
