@@ -14,11 +14,14 @@ struct car{
 	int id;
 	double confidence;
 	std::string plate;
-
+	ros::Time last_appear;
+	int tot_seen;
 };
 int count = 0;
-std::vector<car> cars;
-std::vector<car>::iterator it;
+std::list<car> cars;
+std::list<car>::iterator it;
+ros::Duration thresh_dur(5.0);
+int thresh_seen = 30;
 int LevenshteinDistance(std::string s, std::string t)
 {
     // degenerate cases
@@ -26,7 +29,7 @@ int LevenshteinDistance(std::string s, std::string t)
     if (s.length() == 0) return t.length();
     if (t.length() == 0) return s.length();
 
-    // create two work vectors of integer distances
+    // create two work lists of integer distances
     int v0[t.length() + 1];
     int v1[t.length() + 1];
 
@@ -69,11 +72,12 @@ void Callback(const std_msgs::String::ConstPtr& msg)
   bool flag = false;
   if(!cars.size())
   {
-  	cars.push_back(car());
-  	cars[0].id = 0;
-  	cars[0].confidence = std::atof(conf.c_str());
-  	cars[0].plate = raw;
-  	std::cout << cars[0].id << cars[0].confidence<< cars[0].plate << std::endl;
+  	cars.push_front(car());
+  	cars.front().id = 0;
+  	cars.front().confidence = std::atof(conf.c_str());
+  	cars.front().plate = raw;
+  	cars.front().last_appear = ros::Time::now();
+  	cars.front().tot_seen = 0;
   	count++;
   }
   else
@@ -84,6 +88,8 @@ void Callback(const std_msgs::String::ConstPtr& msg)
   		{
   			std::cout << "Found car: " << it->id << " license plate: "<< it->plate << std::endl;
   			flag = true;
+  			it->tot_seen++;
+  			it->last_appear = ros::Time::now();
   			if(it->confidence < std::atof(conf.c_str()))
   			{
   				it->confidence = std::atof(conf.c_str());
@@ -92,14 +98,25 @@ void Callback(const std_msgs::String::ConstPtr& msg)
   			}
   			break;
   		}
+  		else
+  		{
+  			if((ros::Time::now() - it->last_appear) > thresh_dur && it->tot_seen < thresh_seen)
+  			{
+  				std::cout << "Erroneous license plate removed: "<< it->plate << std::endl;
+  				it = cars.erase(it);
+  			}
+
+  		}
   		//std::cout << it->id << it->confidence<< it->plate << std::endl;
   	}
   	if(flag == false)
 	{	
-		cars.push_back(car());
-		cars[count].id = count;
-		cars[count].confidence = std::atof(conf.c_str());
-		cars[count].plate = raw;
+		cars.push_front(car());
+		cars.front().id = count;
+		cars.front().confidence = std::atof(conf.c_str());
+		cars.front().plate = raw;
+		cars.front().last_appear = ros::Time::now();
+  		cars.front().tot_seen = 0;
 		std::cout << "Added new car: " << count << " license plate: "<< raw << std::endl;
 		count++;
 	}
