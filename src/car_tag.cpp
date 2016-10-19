@@ -9,6 +9,8 @@
 
 #include <ros/ros.h>
 #include "std_msgs/String.h"
+#include <visualization_msgs/Marker.h>
+#include <tf/transform_listener.h>
 
 struct car{
 	int id;
@@ -16,12 +18,15 @@ struct car{
 	std::string plate;
 	ros::Time last_appear;
 	int tot_seen;
+	visualization_msgs::Marker car_marker;
 };
 int count = 0;
 std::list<car> cars;
 std::list<car>::iterator it;
 ros::Duration thresh_dur(5.0);
-int thresh_seen = 30;
+int thresh_seen = 2;
+ros::Publisher marker_pub;
+
 int LevenshteinDistance(std::string s, std::string t)
 {
     // degenerate cases
@@ -65,6 +70,8 @@ int LevenshteinDistance(std::string s, std::string t)
 
 void Callback(const std_msgs::String::ConstPtr& msg)
 {
+  tf::TransformListener listener;
+  tf::StampedTransform transform;
   std::string raw = msg->data.c_str();
   std::size_t pos = raw.find(":");
   std::string conf = raw.substr (pos + 2);
@@ -77,20 +84,51 @@ void Callback(const std_msgs::String::ConstPtr& msg)
   	cars.front().confidence = std::atof(conf.c_str());
   	cars.front().plate = raw;
   	cars.front().last_appear = ros::Time::now();
-  	cars.front().tot_seen = 0;
+  	cars.front().tot_seen = 1;
+  	cars.front().car_marker.header.frame_id = "/odom";
+  	cars.front().car_marker.header.stamp = ros::Time::now();
+  	cars.front().car_marker.ns = "cars";
+  	cars.front().car_marker.action = visualization_msgs::Marker::ADD;
+  	cars.front().car_marker.id = 0;
+  	cars.front().car_marker.type = visualization_msgs::Marker::CUBE;
+  	cars.front().car_marker.scale.x = 2;
+  	cars.front().car_marker.scale.y = 1;
+  	cars.front().car_marker.scale.z = 1;
+  	cars.front().car_marker.lifetime = ros::Duration(0);
+  	cars.front().car_marker.color.g = 1.0f;
+  	cars.front().car_marker.color.a = 1;
   	count++;
+	std::cout << "Added new car: " << count - 1 << " license plate: "<< raw << std::endl;
+  	try {
+		    listener.waitForTransform("odom", "car_pose", ros::Time(0), ros::Duration(2.0) );
+		    listener.lookupTransform("odom", "car_pose", ros::Time(0), transform);
+		    cars.front().car_marker.pose.position.x = transform.getOrigin().x();
+		    cars.front().car_marker.pose.position.y = transform.getOrigin().y();
+		    cars.front().car_marker.pose.position.z = transform.getOrigin().z();
+
+		    cars.front().car_marker.pose.orientation.x = transform.getRotation().x();
+		    cars.front().car_marker.pose.orientation.y = transform.getRotation().y();
+		    cars.front().car_marker.pose.orientation.z = transform.getRotation().z();
+		    cars.front().car_marker.pose.orientation.w = transform.getRotation().w();
+
+		    marker_pub.publish(cars.front().car_marker);
+		}
+	catch (tf::TransformException ex) 
+		{
+    		ROS_ERROR("%s",ex.what());
+		}
   }
   else
   {
   	for (it = cars.begin(); it != cars.end(); ++it)
   	{
-  		if(LevenshteinDistance(raw,it->plate) < 4)
+  		if(LevenshteinDistance(raw,it->plate) < 3)
   		{
   			std::cout << "Found car: " << it->id << " license plate: "<< it->plate << std::endl;
   			flag = true;
   			it->tot_seen++;
   			it->last_appear = ros::Time::now();
-  			if(it->confidence < std::atof(conf.c_str()))
+  			if(it->confidence  < std::atof(conf.c_str()) - 1)
   			{
   				it->confidence = std::atof(conf.c_str());
   				it->plate = raw;
@@ -116,9 +154,39 @@ void Callback(const std_msgs::String::ConstPtr& msg)
 		cars.front().confidence = std::atof(conf.c_str());
 		cars.front().plate = raw;
 		cars.front().last_appear = ros::Time::now();
-  		cars.front().tot_seen = 0;
-		std::cout << "Added new car: " << count << " license plate: "<< raw << std::endl;
-		count++;
+  		cars.front().tot_seen = 1;
+  		cars.front().car_marker.header.frame_id = "/odom";
+	  	cars.front().car_marker.header.stamp = ros::Time::now();
+	  	cars.front().car_marker.ns = "cars";
+	  	cars.front().car_marker.action = visualization_msgs::Marker::ADD;
+	  	cars.front().car_marker.id = count;
+	  	cars.front().car_marker.type = visualization_msgs::Marker::CUBE;
+  		cars.front().car_marker.scale.x = 2;
+  		cars.front().car_marker.scale.y = 1;
+  		cars.front().car_marker.scale.z = 1;
+	  	cars.front().car_marker.lifetime = ros::Duration(0);
+	  	cars.front().car_marker.color.g = 1.0f;
+	  	cars.front().car_marker.color.a = 1;
+	  	count++;
+	  	std::cout << "Added new car: " << count - 1 << " license plate: "<< raw << " Total cars: " << cars.size() << std::endl;
+  	try {
+		    listener.waitForTransform("odom", "car_pose", ros::Time(0), ros::Duration(2.0) );
+		    listener.lookupTransform("odom", "car_pose", ros::Time(0), transform);
+		    cars.front().car_marker.pose.position.x = transform.getOrigin().x();
+		    cars.front().car_marker.pose.position.y = transform.getOrigin().y();
+		    cars.front().car_marker.pose.position.z = transform.getOrigin().z();
+
+		    cars.front().car_marker.pose.orientation.x = transform.getRotation().x();
+		    cars.front().car_marker.pose.orientation.y = transform.getRotation().y();
+		    cars.front().car_marker.pose.orientation.z = transform.getRotation().z();
+		    cars.front().car_marker.pose.orientation.w = transform.getRotation().w();
+
+		    marker_pub.publish(cars.front().car_marker);
+		}
+	catch (tf::TransformException ex) 
+		{
+    		ROS_ERROR("%s",ex.what());
+		}
 	}
   }
 }
@@ -128,6 +196,7 @@ int main(int argc, char **argv)
 	ros::init(argc, argv, "car_tagger");
 	ros::NodeHandle nh;
 	ros::Subscriber sub = nh.subscribe("license_plate", 10, Callback);
+	marker_pub = nh.advertise<visualization_msgs::Marker>("car_marker", 10);
 	ros::spin();
 	return 0;
 }

@@ -19,7 +19,8 @@
 #include "std_msgs/String.h"
 #include <image_transport/image_transport.h>
 #include <cv_bridge/cv_bridge.h>
-
+#include "tf/transform_datatypes.h"
+#include <tf/transform_broadcaster.h>
 
 
 
@@ -69,7 +70,7 @@ int main( int argc, char** argv )
  openalpr.setTopN(5);
  // Optionally, provide the library with a region for pattern matching.  This improves accuracy by
  // comparing the plate text with the regional pattern.
- //openalpr.setDefaultRegion("in");
+ openalpr.setDefaultRegion("base");
 
  // Make sure the library loaded before continuing.
  // For example, it could fail if the config/runtime_data is not found
@@ -119,7 +120,8 @@ cv::Vec3f rotationMatrixToEulerAngles(cv::Mat &R)
 
 bool detectandshow( alpr::Alpr* openalpr, cv::Mat frame )
 {
-
+	static tf::TransformBroadcaster br;
+	tf::Transform transform;
   //timespec startTime;
   //getTimeMonotonic(&startTime);
 
@@ -215,8 +217,7 @@ bool detectandshow( alpr::Alpr* openalpr, cv::Mat frame )
       Rodrigues(rvec,_R_matrix);                   // converts Rotation Vector to Matrix
       _t_matrix = tvec;                            // set translation matrix
       
-      std::cout << "Translation is: " << _t_matrix << std::endl << "Rotation is: " << rotationMatrixToEulerAngles(_R_matrix) << std::endl;
-
+      //std::cout << "Translation is: " << _t_matrix << std::endl << "Rotation is: " << rotationMatrixToEulerAngles(_R_matrix) << std::endl;
       //Draw axis
       //
       /*
@@ -259,12 +260,30 @@ bool detectandshow( alpr::Alpr* openalpr, cv::Mat frame )
       pose_pub.publish(_pose);
 
 
+      //TF broadcaster and frame conversion to ENU
+
+	    /*tf::Matrix3x3 cameraRotation_rh(_R_matrix.at<float>(0,0),   _R_matrix.at<float>(0,1),   _R_matrix.at<float>(0,2),
+	                                    _R_matrix.at<float>(1,0),   _R_matrix.at<float>(1,1),   _R_matrix.at<float>(1,2),
+	                                    _R_matrix.at<float>(2,0),   _R_matrix.at<float>(2,1),   _R_matrix.at<float>(2,2));
+			*/
+
+	    tf::Vector3 globalTranslation_rh( median, -tvec.at<double>(0)/1000, -tvec.at<double>(1)/1000);
+	    cv::Vec3f rotation = rotationMatrixToEulerAngles(_R_matrix);
+	    //tf::Vector3 euler(rotation[2], -rotation[0], -rotation[1]);
+	    tf::Quaternion global_rotation;
+	    global_rotation.setRPY(0, 0, 0);//(rotation[2], -rotation[0], -rotation[1])
+
+      transform = tf::Transform(global_rotation, globalTranslation_rh);
+      br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "camera_base_link", "car_pose"));
+
       //For dubug purposes, prints the contents in the window of median filter 
-      std::cout << "f_sort contains:";
+      
+      /*std::cout << "f_sort contains:";
       for (std::vector<double>::iterator it = f_sort.begin() ; it != f_sort.end(); ++it)
       std::cout << ' ' << *it;
       std::cout << '\n';
-
+		  */
+      
       std::ostringstream strs;
       strs << std::setprecision(3) << median << "m";
       std::string str = strs.str();
@@ -274,7 +293,7 @@ bool detectandshow( alpr::Alpr* openalpr, cv::Mat frame )
       cv::imshow("view", img);
       cv::waitKey(30);
 			alpr::AlprPlateResult plate = results.plates[0];
-			std::cout << "plate" << ": " << plate.topNPlates.size() << " results" << std::endl;
+			//std::cout << "plate" << ": " << plate.topNPlates.size() << " results" << std::endl;
 			for (int k = 0; k < plate.topNPlates.size(); k++)
 			{
 			 alpr::AlprPlate candidate = plate.topNPlates[k];
@@ -294,6 +313,6 @@ bool detectandshow( alpr::Alpr* openalpr, cv::Mat frame )
   
 
 
-
+  br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "camera_base_link", "car_pose"));
   return results.plates.size() > 0;
 }
