@@ -7,7 +7,7 @@ A ROS node to extract pose information form the license plate using openalpr lib
 Just clone the repository and build it using catkin_make command. Also modify the path of runtime_data in the openalpr.conf file in the config directory to point it to your runtime_data folder.
 
 To run use the demo.launch file:  
-'''roslaunch alpr_pose demo.launch'''
+```roslaunch alpr_pose demo.launch```
 
 UPDATE: Intigration of map requires rviz satellite plugin. Repository URL https://github.com/gareth-cross/rviz_satellite
 
