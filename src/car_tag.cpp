@@ -73,16 +73,23 @@ void Callback(const std_msgs::String::ConstPtr& msg)
   tf::TransformListener listener;
   tf::StampedTransform transform;
   std::string raw = msg->data.c_str();
-  std::size_t pos = raw.find(":");
-  std::string conf = raw.substr (pos + 2);
-  raw.resize(pos);
+  std::size_t pos_s = raw.find(":");
+  std::string plate = raw.substr(0,pos_s);
+  std::size_t pos_e = raw.find("B");
+  std::string conf = raw.substr (pos_s + 2, pos_e - pos_s -4);
+  pos_s = raw.find("G");
+  float blue = std::atof(raw.substr (pos_e + 1, pos_s - pos_e -2).c_str());
+  pos_e = raw.find("R");
+  float green = std::atof(raw.substr (pos_s + 1, pos_e - pos_s -2).c_str());
+  float red = std::atof(raw.substr (pos_e + 1).c_str());
+  //std::cout << "Plate "<<plate <<" conf "<<conf<<" B "<<blue<<" G " << green <<" R "<< red << std::endl;
   bool flag = false;
   if(!cars.size())
   {
   	cars.push_front(car());
   	cars.front().id = 0;
   	cars.front().confidence = std::atof(conf.c_str());
-  	cars.front().plate = raw;
+  	cars.front().plate = plate;
   	cars.front().last_appear = ros::Time::now();
   	cars.front().tot_seen = 1;
   	cars.front().car_marker.header.frame_id = "/odom";
@@ -90,22 +97,26 @@ void Callback(const std_msgs::String::ConstPtr& msg)
   	cars.front().car_marker.ns = "cars";
   	cars.front().car_marker.action = visualization_msgs::Marker::ADD;
   	cars.front().car_marker.id = 0;
-  	cars.front().car_marker.type = visualization_msgs::Marker::CUBE;
-  	cars.front().car_marker.scale.x = 2;
-  	cars.front().car_marker.scale.y = 1;
-  	cars.front().car_marker.scale.z = 1;
+	//cars.front().car_marker.type = visualization_msgs::Marker::CUBE;
+	cars.front().car_marker.type = visualization_msgs::Marker::MESH_RESOURCE;
+	cars.front().car_marker.mesh_resource = "package://alpr_pose/mesh/volks.dae";
+	cars.front().car_marker.scale.x = 0.7;
+  	cars.front().car_marker.scale.y = 0.7;
+  	cars.front().car_marker.scale.z = 0.7;
   	cars.front().car_marker.lifetime = ros::Duration(0);
-  	cars.front().car_marker.color.g = 1.0f;
+  	cars.front().car_marker.color.b = blue/255.0f;
+  	cars.front().car_marker.color.g = green/255.0f;
+  	cars.front().car_marker.color.r = red/255.0f;
   	cars.front().car_marker.color.a = 1;
   	count++;
-	std::cout << "Added new car: " << count - 1 << " license plate: "<< raw << std::endl;
+	std::cout << "Added new car: " << count - 1 << " license plate: "<< plate << std::endl;
   	try {
-		    listener.waitForTransform("odom", "car_pose", ros::Time(0), ros::Duration(2.0) );
+		    listener.waitForTransform("odom", "car_pose", ros::Time(0), ros::Duration(3.0) );
 		    listener.lookupTransform("odom", "car_pose", ros::Time(0), transform);
-		    cars.front().car_marker.pose.position.x = transform.getOrigin().x();
-		    cars.front().car_marker.pose.position.y = transform.getOrigin().y();
+		    cars.front().car_marker.pose.position.x = transform.getOrigin().x() - 2;
+		    cars.front().car_marker.pose.position.y = transform.getOrigin().y() - 2;
 		    cars.front().car_marker.pose.position.z = transform.getOrigin().z();
-
+		    transform.setRotation(transform.getRotation() * tf::createQuaternionFromYaw(M_PI/2) );
 		    cars.front().car_marker.pose.orientation.x = transform.getRotation().x();
 		    cars.front().car_marker.pose.orientation.y = transform.getRotation().y();
 		    cars.front().car_marker.pose.orientation.z = transform.getRotation().z();
@@ -122,16 +133,17 @@ void Callback(const std_msgs::String::ConstPtr& msg)
   {
   	for (it = cars.begin(); it != cars.end(); ++it)
   	{
-  		if(LevenshteinDistance(raw,it->plate) < 3)
+  		if(LevenshteinDistance(plate,it->plate) < 3)
   		{
   			std::cout << "Found car: " << it->id << " license plate: "<< it->plate << std::endl;
+  			marker_pub.publish(it->car_marker);
   			flag = true;
   			it->tot_seen++;
   			it->last_appear = ros::Time::now();
   			if(it->confidence  < std::atof(conf.c_str()) - 1)
   			{
   				it->confidence = std::atof(conf.c_str());
-  				it->plate = raw;
+  				it->plate = plate;
   				std::cout << "License plate updated to: "<< it->plate << std::endl;
   			}
   			break;
@@ -152,7 +164,7 @@ void Callback(const std_msgs::String::ConstPtr& msg)
 		cars.push_front(car());
 		cars.front().id = count;
 		cars.front().confidence = std::atof(conf.c_str());
-		cars.front().plate = raw;
+		cars.front().plate = plate;
 		cars.front().last_appear = ros::Time::now();
   		cars.front().tot_seen = 1;
   		cars.front().car_marker.header.frame_id = "/odom";
@@ -160,22 +172,26 @@ void Callback(const std_msgs::String::ConstPtr& msg)
 	  	cars.front().car_marker.ns = "cars";
 	  	cars.front().car_marker.action = visualization_msgs::Marker::ADD;
 	  	cars.front().car_marker.id = count;
-	  	cars.front().car_marker.type = visualization_msgs::Marker::CUBE;
-  		cars.front().car_marker.scale.x = 2;
-  		cars.front().car_marker.scale.y = 1;
-  		cars.front().car_marker.scale.z = 1;
+	  	//cars.front().car_marker.type = visualization_msgs::Marker::CUBE;
+	  	cars.front().car_marker.type = visualization_msgs::Marker::MESH_RESOURCE;
+  		cars.front().car_marker.mesh_resource = "package://alpr_pose/mesh/volks.dae";
+  		cars.front().car_marker.scale.x = 0.7;
+  		cars.front().car_marker.scale.y = 0.7;
+  		cars.front().car_marker.scale.z = 0.7;
 	  	cars.front().car_marker.lifetime = ros::Duration(0);
-	  	cars.front().car_marker.color.g = 1.0f;
+	  	cars.front().car_marker.color.b = blue/255.0f;
+	  	cars.front().car_marker.color.g = green/255.0f;
+	  	cars.front().car_marker.color.r = red/255.0f;
 	  	cars.front().car_marker.color.a = 1;
 	  	count++;
-	  	std::cout << "Added new car: " << count - 1 << " license plate: "<< raw << " Total cars: " << cars.size() << std::endl;
+	  	std::cout << "Added new car: " << count - 1 << " license plate: "<< plate << " Total cars: " << cars.size() << std::endl;
   	try {
-		    listener.waitForTransform("odom", "car_pose", ros::Time(0), ros::Duration(2.0) );
+		    listener.waitForTransform("odom", "car_pose", ros::Time(0), ros::Duration(3.0) );
 		    listener.lookupTransform("odom", "car_pose", ros::Time(0), transform);
-		    cars.front().car_marker.pose.position.x = transform.getOrigin().x();
-		    cars.front().car_marker.pose.position.y = transform.getOrigin().y();
+		    cars.front().car_marker.pose.position.x = transform.getOrigin().x() - 2; //Compensation for rotation
+		    cars.front().car_marker.pose.position.y = transform.getOrigin().y() - 2;
 		    cars.front().car_marker.pose.position.z = transform.getOrigin().z();
-
+		    transform.setRotation(transform.getRotation() * tf::createQuaternionFromYaw(M_PI/2) );
 		    cars.front().car_marker.pose.orientation.x = transform.getRotation().x();
 		    cars.front().car_marker.pose.orientation.y = transform.getRotation().y();
 		    cars.front().car_marker.pose.orientation.z = transform.getRotation().z();

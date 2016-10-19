@@ -37,6 +37,7 @@ std::string path = ros::package::getPath("alpr_pose");
 alpr::Alpr openalpr("gb", path + "/config/openalpr.conf");
 ros::Publisher pose_pub; 
 ros::Publisher plate_pub;
+image_transport::Publisher pub;
 std_msgs::String msg;
 
 std::vector<double> f_data (5, 0);
@@ -82,14 +83,15 @@ int main( int argc, char** argv )
 
  ros::init(argc, argv, "alpr_node");
  ros::NodeHandle nh;
- cv::namedWindow("view");
- cv::startWindowThread();
+ //cv::namedWindow("view");
+ //cv::startWindowThread();
  image_transport::ImageTransport it(nh);
- image_transport::Subscriber sub = it.subscribe("/bebop/image_raw", 1, imageCallback);
+ image_transport::Subscriber sub = it.subscribe("/camera/image_raw", 10, imageCallback);
+ pub = it.advertise("/alpr_image", 1);
  plate_pub = nh.advertise<std_msgs::String>("license_plate", 10);
- pose_pub = nh.advertise<geometry_msgs::PoseStamped>("/alpr_pose",1);
+ pose_pub = nh.advertise<geometry_msgs::PoseStamped>("/alpr_pose",10);
  ros::spin();
- cv::destroyWindow("view");
+ //cv::destroyWindow("view");
 
 }
 
@@ -271,7 +273,7 @@ bool detectandshow( alpr::Alpr* openalpr, cv::Mat frame )
 	    cv::Vec3f rotation = rotationMatrixToEulerAngles(_R_matrix);
 	    //tf::Vector3 euler(rotation[2], -rotation[0], -rotation[1]);
 	    tf::Quaternion global_rotation;
-	    global_rotation.setRPY(0, 0, 0);//(rotation[2], -rotation[0], -rotation[1])
+	    global_rotation.setRPY(0,0,0);//(rotation[2], -rotation[0], -rotation[1])
 
       transform = tf::Transform(global_rotation, globalTranslation_rh);
       br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "camera_base_link", "car_pose"));
@@ -283,15 +285,29 @@ bool detectandshow( alpr::Alpr* openalpr, cv::Mat frame )
       std::cout << ' ' << *it;
       std::cout << '\n';
 		  */
-      
+		  cv::Scalar color;
+		  try
+		  {
+		  	color = cv::mean(img(cv::Rect(First_details.corners[0].x + 5, std::max(First_details.corners[0].y - 60, 0), 60, 15)));//Car average color
+      	//cv::rectangle(img, cv::Rect(First_details.corners[0].x, std::max(First_details.corners[0].y - 60, 0), 60, 15), cv::Scalar(0,0,255));
+		  }
+		  catch(cv::Exception& e)
+		  {
+		  	const char* err_msg = e.what();
+    		std::cout << "ROI exception caught: " << err_msg << std::endl;
+		  	color = cv::Scalar(0, 0, 255);
+		  }
+      //cv::Scalar color = cv::Scalar(0, 0, 255);
       std::ostringstream strs;
       strs << std::setprecision(3) << median << "m";
       std::string str = strs.str();
       putText(img, str, cv::Point(frame.cols - 150, 30), 2, 1, cv::Scalar(0,255,0), 1, 8, false);
 
       //Show image with distance printed
-      cv::imshow("view", img);
-      cv::waitKey(30);
+      //cv::imshow("view", img);
+      //cv::waitKey(30);
+			sensor_msgs::ImagePtr img_msg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", img).toImageMsg();
+    	pub.publish(img_msg);
 			alpr::AlprPlateResult plate = results.plates[0];
 			//std::cout << "plate" << ": " << plate.topNPlates.size() << " results" << std::endl;
 			for (int k = 0; k < plate.topNPlates.size(); k++)
@@ -299,16 +315,21 @@ bool detectandshow( alpr::Alpr* openalpr, cv::Mat frame )
 			 alpr::AlprPlate candidate = plate.topNPlates[k];
 			 //std::cout << "    - " << candidate.characters << "\t confidence: " << candidate.overall_confidence;
 			 //std::cout << "\t pattern_match: " << candidate.matches_template << std::endl;
-			 if(candidate.overall_confidence > 75)
+			 if(candidate.overall_confidence > 70)
 				{
 					std::ostringstream strs;
-      		strs << candidate.overall_confidence;
+      		strs << candidate.overall_confidence << " B"<< color.val[0] << " G"<< color.val[1] << " R"<< color.val[2];
       		std::string str = strs.str();
 			 		msg.data = candidate.characters + ": " + str;
 			 		plate_pub.publish(msg);
 			 	}
 			}
 
+    }
+    else
+    {
+    	sensor_msgs::ImagePtr img_msg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", frame).toImageMsg();
+    	pub.publish(img_msg);
     } 
   
 
