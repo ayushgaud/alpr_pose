@@ -135,6 +135,7 @@ include_directories(
 ## Declare a C++ executable
 add_executable(alpr_pose_node src/alpr_pose.cpp)
 add_executable(car_tag_node src/car_tag.cpp)
+add_executable(occupancy_node src/occupancy.cpp)
 
 ## Add cmake target dependencies of the executable
 ## same as for the library above
@@ -147,6 +148,9 @@ target_link_libraries(alpr_pose_node ${PROJECT_SOURCE_DIR}/lib/libopenalpr.so.2 
 target_link_libraries(car_tag_node
   ${catkin_LIBRARIES} 
  )
+target_link_libraries(occupancy_node
+  ${catkin_LIBRARIES}
+)
 #############
 ## Install ##
 #############

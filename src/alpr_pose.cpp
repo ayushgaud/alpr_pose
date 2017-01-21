@@ -16,6 +16,7 @@
 #include <ros/ros.h>
 #include <ros/package.h>
 #include "geometry_msgs/PoseStamped.h"
+#include "nav_msgs/Odometry.h"
 #include "std_msgs/String.h"
 #include <image_transport/image_transport.h>
 #include <cv_bridge/cv_bridge.h>
@@ -37,11 +38,17 @@ std::string path = ros::package::getPath("alpr_pose");
 alpr::Alpr openalpr("gb", path + "/config/openalpr.conf");
 ros::Publisher pose_pub; 
 ros::Publisher plate_pub;
+ros::Subscriber pose_sub;
 image_transport::Publisher pub;
 std_msgs::String msg;
-
+tf::Pose  odom_pose;
 std::vector<double> f_data (5, 0);
 std::vector<double> f_sort (5, 0);
+
+void poseCb(const nav_msgs::Odometry& msg)
+{
+   tf::poseMsgToTF(msg.pose.pose, odom_pose);
+}
 
 void imageCallback(const sensor_msgs::ImageConstPtr& msg)
 {
@@ -87,9 +94,10 @@ int main( int argc, char** argv )
  //cv::startWindowThread();
  image_transport::ImageTransport it(nh);
  image_transport::Subscriber sub = it.subscribe("/camera/image_raw", 10, imageCallback);
- pub = it.advertise("/alpr_image", 1);
+ pub = it.advertise("/alpr_image", 10);
  plate_pub = nh.advertise<std_msgs::String>("license_plate", 10);
- pose_pub = nh.advertise<geometry_msgs::PoseStamped>("/alpr_pose",10);
+ pose_pub = nh.advertise<geometry_msgs::Pose>("/alpr_pose",10);
+ pose_sub = nh.subscribe("/bebop/odom", 10, poseCb);
  ros::spin();
  //cv::destroyWindow("view");
 
@@ -156,7 +164,7 @@ bool detectandshow( alpr::Alpr* openalpr, cv::Mat frame )
       cv::Mat img = frame;
       double f = 55;                           // focal length in mm
       double sx = 22.3, sy = 14.9;             // sensor size
-      double width = 640, height = 368;        // image size
+      double width = frame.cols, height = frame.rows;        // image size
       double params[] = { width*f/sx,   // fx
                           height*f/sy,  // fy
                           width/2,      // cx
@@ -251,15 +259,15 @@ bool detectandshow( alpr::Alpr* openalpr, cv::Mat frame )
 
       double median = f_sort[f_sort.size()/2];
 
-      //Pose publisher
-      geometry_msgs::PoseStamped _pose;
-      _pose.pose.position.x = tvec.at<double>(0)/1000;
-      _pose.pose.position.y = tvec.at<double>(1)/1000;
-      _pose.pose.position.z = median;
+      // //Pose publisher
+      // geometry_msgs::PoseStamped _pose;
+      // _pose.pose.position.x = tvec.at<double>(0)/1000;
+      // _pose.pose.position.y = tvec.at<double>(1)/1000;
+      // _pose.pose.position.z = median;
       
-      _pose.header.stamp = ros::Time::now();
-      _pose.header.frame_id = "camera";
-      pose_pub.publish(_pose);
+      // _pose.header.stamp = ros::Time::now();
+      // _pose.header.frame_id = "camera";
+      // pose_pub.publish(_pose);
 
 
       //TF broadcaster and frame conversion to ENU
@@ -276,7 +284,10 @@ bool detectandshow( alpr::Alpr* openalpr, cv::Mat frame )
 	    global_rotation.setRPY(0,0,0);//(rotation[2], -rotation[0], -rotation[1])
 
       transform = tf::Transform(global_rotation, globalTranslation_rh);
-      br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "camera_base_link", "car_pose"));
+      geometry_msgs::Pose _pose;
+      tf::poseTFToMsg(odom_pose * transform, _pose);
+      
+        //br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "camera_base_link", "car_pose"));
 
       //For dubug purposes, prints the contents in the window of median filter 
       
@@ -301,8 +312,11 @@ bool detectandshow( alpr::Alpr* openalpr, cv::Mat frame )
       std::ostringstream strs;
       strs << std::setprecision(3) << median << "m";
       std::string str = strs.str();
-      putText(img, str, cv::Point(frame.cols - 150, 30), 2, 1, cv::Scalar(0,255,0), 1, 8, false);
-
+      putText(img, str, cv::Point(frame.cols - 200, frame.rows - 25), 2, 1, cv::Scalar(255,0,0), 1, 8, false);
+      std::ostringstream plate_char;
+      plate_char << results.plates[0].topNPlates[0].characters;
+      std::string plate_str = plate_char.str();
+      putText(img, plate_str, cv::Point(frame.cols - 200, frame.rows - 50), 2, 1, cv::Scalar(255,0,0), 1, 8, false);
       //Show image with distance printed
       //cv::imshow("view", img);
       //cv::waitKey(30);
@@ -322,6 +336,8 @@ bool detectandshow( alpr::Alpr* openalpr, cv::Mat frame )
       		std::string str = strs.str();
 			 		msg.data = candidate.characters + ": " + str;
 			 		plate_pub.publish(msg);
+          if(~std::isnan(transform.getOrigin().x()))
+            pose_pub.publish(_pose);
 			 	}
 			}
 
