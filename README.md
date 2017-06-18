@@ -13,4 +13,4 @@ UPDATE: Intigration of map requires rviz satellite plugin. Repository URL https:
 
 For any queries contact me directly at my Email ayush.gaud[at]gmail.com
 
-![rviz_screenshot](https://cloud.githubusercontent.com/assets/4923897/19534873/3219b4dc-9663-11e6-86b5-8e471b30a509.png)
+![carparkingassistance](https://user-images.githubusercontent.com/4923897/27262126-dc6b9cca-546d-11e7-93a6-273a17a7b239.gif)
